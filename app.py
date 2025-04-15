@@ -4,6 +4,7 @@ import numpy as np
 import os
 import datetime
 from io import BytesIO
+import shutil  # dùng để xóa thư mục
 
 st.set_page_config(page_title="Đánh giá bài giảng - AHP & TOPSIS", layout="centered")
 
@@ -55,7 +56,7 @@ elif st.session_state.step == 2:
         st.markdown(f"**Chuyên gia {i+1}:**")
         expert_scores = []
         for crit in criteria:
-            score = st.slider(crit, min_value=1, max_value=9, key=f"{crit}_{i}")
+            score = st.slider(crit, min_value=1, max_value=10, key=f"{crit}_{i}")  # Đã đổi sang 1–10
             expert_scores.append(score)
         scores.append(expert_scores)
 
@@ -152,10 +153,19 @@ elif st.session_state.step == 4:
             st.write(f"**Thời gian:** {row['Thời gian']}")
             if os.path.exists(row["Đường dẫn file"]):
                 with open(row["Đường dẫn file"], "rb") as f:
-                    st.download_button("⬇ Tải file bài giảng", f, file_name=row["Tên file bài giảng"])
+                    st.download_button("⬇ Tải file bài giảng", f, file_name=row["Tên file bài giảng"] )
             st.markdown("---")
     else:
         st.info("Chưa có kết quả nào được lưu.")
+
+    # --- Nút xóa toàn bộ lịch sử ---
+    if st.button("🗑️ Xóa toàn bộ lịch sử đánh giá"):
+        try:
+            if os.path.exists("output"):
+                shutil.rmtree("output")
+            st.success("✅ Đã xoá toàn bộ lịch sử đánh giá.")
+        except Exception as e:
+            st.error(f"Lỗi khi xoá: {e}")
 
     if st.button("⬅ Quay lại"):
         st.session_state.step = 1
