@@ -5,7 +5,7 @@ import os
 import base64
 
 st.set_page_config(page_title="Đánh giá bài giảng - AHP & TOPSIS", layout="centered")
-st.title("📊 Phần mềm đánh giá bài giảng (AHP + TOPSIS + Entropy)")
+st.title("📊 Phần mềm đánh giá bài giảng")
 
 criteria = [
     "Khả năng khảo sát thực tế và xây dựng kiến thức",
@@ -134,7 +134,7 @@ elif st.session_state.step == 3:
         st.success(f"✅ Bài giảng: {st.session_state.ten_bai_giang}")
         st.write("### 🎯 So sánh kết quả đánh giá:")
         df_ket_qua = pd.DataFrame({
-            "Phương pháp": ["Chuyên gia (AHP)", "Entropy"],
+            "Phương pháp": ["Chuyên gia", "Entropy"],
             "Điểm đánh giá": [avg_expert, avg_entropy],
             "Xếp loại": [xep_loai(avg_expert), xep_loai(avg_entropy)]
         })
