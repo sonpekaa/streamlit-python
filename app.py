@@ -1,14 +1,14 @@
+# Nâng cấp ứng dụng đánh giá bài giảng với trọng số chuyên gia và so sánh AHP vs Entropy
 import streamlit as st
 import pandas as pd
 import numpy as np
 import os
 import datetime
 from io import BytesIO
-import shutil  # dùng để xóa thư mục
+import shutil
 
-st.set_page_config(page_title="Đánh giá bài giảng - AHP & TOPSIS", layout="centered")
-
-st.title("📊 Phần mềm đánh giá bài giảng (AHP + TOPSIS)")
+st.set_page_config(page_title="Đánh giá bài giảng - AHP & TOPSIS", layout="wide")
+st.title("📊 Phần mềm đánh giá bài giảng (AHP + TOPSIS + Entropy)")
 
 criteria = [
     "Khả năng khảo sát thực tế và xây dựng kiến thức",
@@ -22,10 +22,8 @@ criteria = [
     "Khắc phục khuyết điểm thể chất"
 ]
 
-# Điều hướng nhiều trang bằng session state
 if 'step' not in st.session_state:
     st.session_state.step = 1
-
 if 'uploaded_file' not in st.session_state:
     st.session_state.uploaded_file = None
 if 'ten_bai_giang' not in st.session_state:
@@ -34,9 +32,11 @@ if 'so_chuyen_gia' not in st.session_state:
     st.session_state.so_chuyen_gia = 1
 if 'expert_scores' not in st.session_state:
     st.session_state.expert_scores = []
+if 'ahp_weights_input' not in st.session_state:
+    st.session_state.ahp_weights_input = []
 
-# --- Bước 1: Nhập thông tin cơ bản ---
-if st.session_state.step == 1:
+# Bước 1: Nhập dữ liệu
+def step1():
     st.header("Bước 1: Tải file & nhập thông tin")
     st.session_state.uploaded_file = st.file_uploader("Tải lên file bài giảng", type=["pdf", "docx", "pptx"])
     st.session_state.ten_bai_giang = st.text_input("Nhập tên bài giảng")
@@ -48,132 +48,99 @@ if st.session_state.step == 1:
         else:
             st.warning("Vui lòng nhập đầy đủ thông tin và tải file bài giảng.")
 
-# --- Bước 2: Nhập điểm đánh giá từ chuyên gia ---
-elif st.session_state.step == 2:
-    st.header("Bước 2: Nhập điểm đánh giá")
-    scores = []
-    for i in range(st.session_state.so_chuyen_gia):
-        st.markdown(f"**Chuyên gia {i+1}:**")
-        expert_scores = []
-        for crit in criteria:
-            score = st.slider(crit, min_value=1, max_value=10, key=f"{crit}_{i}")
-            expert_scores.append(score)
-        scores.append(expert_scores)
+# Bước 2: Nhập điểm và trọng số
 
-    if st.button("Đánh giá"):
+def step2():
+    st.header("Bước 2: Nhập điểm đánh giá từ chuyên gia")
+    scores = []
+    weights = []
+    for i in range(st.session_state.so_chuyen_gia):
+        st.markdown(f"### Chuyên gia {i+1}")
+        expert_scores = []
+        expert_weights = []
+        cols = st.columns(2)
+        for j, crit in enumerate(criteria):
+            score = cols[0].slider(f"{crit} (Điểm)", min_value=1, max_value=10, key=f"score_{i}_{j}")
+            weight = cols[1].number_input(f"{crit} (Trọng số AHP)", min_value=0.0, step=0.1, key=f"weight_{i}_{j}")
+            expert_scores.append(score)
+            expert_weights.append(weight)
+        scores.append(expert_scores)
+        weights.append(expert_weights)
+
+    if st.button("Tính toán và Đánh giá"):
         st.session_state.expert_scores = scores
+        st.session_state.ahp_weights_input = weights
         st.session_state.step = 3
 
-# --- Bước 3: Kết quả ---
-elif st.session_state.step == 3:
+# Bước 3: Kết quả đánh giá và so sánh AHP vs Entropy
+
+def step3():
     st.header("Bước 3: Kết quả đánh giá")
     try:
         scores_matrix = np.array(st.session_state.expert_scores)
+        weights_matrix = np.array(st.session_state.ahp_weights_input)
 
-        # AHP: Trọng số từ điểm trung bình chuyên gia
-        avg_scores = scores_matrix.mean(axis=0)
-        pairwise_matrix = np.outer(avg_scores, 1/avg_scores)
-        priority_vector = pairwise_matrix.mean(axis=1)
-        weights = priority_vector / priority_vector.sum()
+        # AHP weights (bình quân trọng số từ chuyên gia)
+        ahp_weights = weights_matrix.mean(axis=0)
+        ahp_weights /= ahp_weights.sum()
 
-        # Hiển thị bảng trọng số
-        st.subheader("📌 Trọng số tiêu chí (AHP)")
+        # Entropy weights
+        norm_scores = scores_matrix / scores_matrix.sum(axis=0)
+        entropy = -np.nansum(norm_scores * np.log(norm_scores + 1e-9), axis=0) / np.log(len(scores_matrix))
+        diversity = 1 - entropy
+        entropy_weights = diversity / np.sum(diversity)
+
+        # TOPSIS đánh giá với AHP
+        def topsis(matrix, weights):
+            norm = matrix / np.sqrt((matrix**2).sum(axis=0))
+            weighted = norm * weights
+            best = weighted.max(axis=0)
+            worst = weighted.min(axis=0)
+            d_best = np.linalg.norm(weighted - best, axis=1)
+            d_worst = np.linalg.norm(weighted - worst, axis=1)
+            return d_worst / (d_best + d_worst + 1e-9)
+
+        topsis_ahp = topsis(scores_matrix, ahp_weights).mean()
+        topsis_entropy = topsis(scores_matrix, entropy_weights).mean()
+
+        def classify(score):
+            if score >= 0.7:
+                return "Xuất sắc"
+            elif score >= 0.5:
+                return "Tốt"
+            elif score >= 0.3:
+                return "Trung bình"
+            return "Kém"
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("🔍 Kết quả dùng trọng số chuyên gia (AHP)")
+            st.metric("Điểm", round(topsis_ahp, 4))
+            st.write("Xếp loại:", classify(topsis_ahp))
+
+        with col2:
+            st.subheader("🔍 Kết quả dùng trọng số Entropy")
+            st.metric("Điểm", round(topsis_entropy, 4))
+            st.write("Xếp loại:", classify(topsis_entropy))
+
+        st.markdown("### 📊 So sánh Trọng số từng tiêu chí")
         df_weights = pd.DataFrame({
             "Tiêu chí": criteria,
-            "Trọng số": weights
+            "Trọng số AHP": ahp_weights,
+            "Trọng số Entropy": entropy_weights
         })
-        st.dataframe(df_weights.style.format({"Trọng số": "{:.4f}"}), use_container_width=True)
-
-        # TOPSIS
-        normalized = scores_matrix / np.sqrt((scores_matrix**2).sum(axis=0))
-        weighted = normalized * weights
-
-        ideal_best = weighted.max(axis=0)
-        ideal_worst = weighted.min(axis=0)
-
-        distances_best = np.linalg.norm(weighted - ideal_best, axis=1)
-        distances_worst = np.linalg.norm(weighted - ideal_worst, axis=1)
-        topsis_scores = distances_worst / (distances_best + distances_worst)
-
-        final_score = topsis_scores.mean()
-
-        if final_score > 0.7:
-            classification = "Xuất sắc"
-        elif final_score > 0.5:
-            classification = "Tốt"
-        elif final_score > 0.3:
-            classification = "Trung bình"
-        else:
-            classification = "Kém"
-
-        st.success(f"✅ Bài giảng: {st.session_state.ten_bai_giang}")
-        st.write(f"**Điểm đánh giá (TOPSIS):** {final_score:.4f}")
-        st.write(f"**Xếp loại:** {classification}")
-
-        # --- Lưu kết quả ---
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        save_dir = f"output/{st.session_state.ten_bai_giang.replace(' ', '_')}_{timestamp}"
-        os.makedirs(save_dir, exist_ok=True)
-
-        uploaded_filename = st.session_state.uploaded_file.name
-        uploaded_path = os.path.join(save_dir, uploaded_filename)
-
-        uploaded_content = st.session_state.uploaded_file.getvalue()
-        with open(uploaded_path, "wb") as f:
-            f.write(uploaded_content)
-
-        results_path = "output/results.csv"
-        df_result = pd.DataFrame([{ 
-            "Tên bài giảng": st.session_state.ten_bai_giang,
-            "Tên file bài giảng": uploaded_filename,
-            "Đường dẫn file": uploaded_path,
-            "Điểm đánh giá": final_score,
-            "Xếp loại": classification,
-            "Thời gian": timestamp
-        }])
-
-        if os.path.exists(results_path):
-            old = pd.read_csv(results_path)
-            df_result = pd.concat([old, df_result], ignore_index=True)
-
-        df_result.to_csv(results_path, index=False)
-        st.success("📁 Kết quả đã được lưu cùng với file bài giảng.")
-
-        if st.button("Xem danh sách kết quả đã lưu"):
-            st.session_state.step = 4
+        st.dataframe(df_weights, use_container_width=True)
 
     except Exception as e:
-        st.error(f"Lỗi khi đánh giá: {e}")
+        st.error(f"Lỗi khi xử lý dữ liệu: {e}")
 
     if st.button("🔁 Đánh giá lại"):
         st.session_state.step = 1
 
-# --- Bước 4: Xem kết quả đã lưu ---
-elif st.session_state.step == 4:
-    st.header("📚 Danh sách kết quả đã lưu")
-    results_path = "output/results.csv"
-    if os.path.exists(results_path):
-        df = pd.read_csv(results_path)
-
-        for index, row in df.iterrows():
-            st.subheader(f"📘 {row['Tên bài giảng']}")
-            st.write(f"**Điểm:** {row['Điểm đánh giá']:.4f}")
-            st.write(f"**Xếp loại:** {row['Xếp loại']}")
-            st.write(f"**Thời gian:** {row['Thời gian']}")
-            if os.path.exists(row["Đường dẫn file"]):
-                with open(row["Đường dẫn file"], "rb") as f:
-                    st.download_button("⬇ Tải file bài giảng", f, file_name=row["Tên file bài giảng"] )
-            st.markdown("---")
-    else:
-        st.info("Chưa có kết quả nào được lưu.")
-
-    if st.button("🗑️ Xóa toàn bộ lịch sử đánh giá"):
-        try:
-            if os.path.exists("output"):
-                shutil.rmtree("output")
-            st.success("✅ Đã xoá toàn bộ lịch sử đánh giá.")
-        except Exception as e:
-            st.error(f"Lỗi khi xoá: {e}")
-
-    if st.button("⬅ Quay lại"):
-        st.session_state.step = 1
+# Điều hướng theo bước
+if st.session_state.step == 1:
+    step1()
+elif st.session_state.step == 2:
+    step2()
+elif st.session_state.step == 3:
+    step3()
