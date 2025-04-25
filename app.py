@@ -63,9 +63,16 @@ if 'user' not in st.session_state:
 # Sidebar
 with st.sidebar:
     st.write(f"👤 Đăng nhập với: `{st.session_state.user}`")
+
     if st.button("🚪 Đăng xuất"):
         st.session_state.clear()
         st.experimental_rerun()
+
+    if st.button("🏠 Trang chủ"):
+        st.session_state.view_history = False  # Tắt chế độ xem lịch sử nếu đang bật
+        st.session_state.step = 1  # Quay lại bước đầu tiên
+        st.experimental_rerun()  # Cập nhật giao diện ngay
+
     if st.button("📚 Xem lịch sử đánh giá"):
         st.session_state.view_history = True
 
