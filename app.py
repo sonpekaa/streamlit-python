@@ -66,15 +66,16 @@ with st.sidebar:
 
     if st.button("🚪 Đăng xuất"):
         st.session_state.clear()
-        st.experimental_rerun()
+        st.rerun()
 
     if st.button("🏠 Trang chủ"):
-        st.session_state.view_history = False  # Tắt chế độ xem lịch sử nếu đang bật
-        st.session_state.step = 1  # Quay lại bước đầu tiên
-        st.experimental_rerun()  # Cập nhật giao diện ngay
+        st.session_state.view_history = False
+        st.session_state.step = 1
+        st.rerun()
 
     if st.button("📚 Xem lịch sử đánh giá"):
         st.session_state.view_history = True
+        st.rerun()
 
 if st.session_state.get("view_history", False):
     st.title("📚 Lịch sử đánh giá của bạn")
