@@ -72,7 +72,7 @@ with st.sidebar:
     if st.button("🏠 Về trang chủ"):
         if st.session_state.step != 1:  # Nếu không phải đang ở trang tải bài giảng
             st.session_state.step = 1
-            st.rerun()  # Cập nhật giao diện ngay
+            st.experimental_rerun()  # Cập nhật giao diện ngay
 
 if st.session_state.get("view_history", False):
     st.title("📚 Lịch sử đánh giá của bạn")
