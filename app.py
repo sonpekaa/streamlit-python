@@ -38,6 +38,7 @@ def login_page():
                 st.success(f"Chào mừng {username}!")
                 st.session_state.user = username
                 st.session_state.step = 1
+                st.experimental_rerun()
             else:
                 st.error("Sai tên đăng nhập hoặc mật khẩu")
 
@@ -66,39 +67,17 @@ with st.sidebar:
 
     if st.button("🚪 Đăng xuất"):
         st.session_state.clear()
-        st.rerun()
+        st.experimental_rerun()
 
     if st.button("🏠 Trang chủ"):
-        st.session_state.view_history = False
-        st.session_state.step = 1
-        st.rerun()
+        if st.session_state.get("step", 1) != 1:
+            st.session_state.view_history = False
+            st.session_state.step = 1
+            st.experimental_rerun()
 
     if st.button("📚 Xem lịch sử đánh giá"):
         st.session_state.view_history = True
-        st.rerun()
-
-if st.session_state.get("view_history", False):
-    st.title("📚 Lịch sử đánh giá của bạn")
-    user_folder = f"users/{st.session_state.user}"
-    if not os.path.exists(user_folder):
-        os.makedirs(user_folder)
-
-    search_term = st.text_input("🔍 Tìm kiếm tên bài giảng")
-    files = [f for f in os.listdir(user_folder) if f.endswith(".csv")]
-    filtered_files = [f for f in files if search_term.lower() in f.lower()]
-
-    if filtered_files:
-        for f in sorted(filtered_files, reverse=True):
-            with open(os.path.join(user_folder, f), "rb") as file:
-                st.download_button(
-                    label=f"📥 {f}",
-                    data=file,
-                    file_name=f,
-                    mime="text/csv"
-                )
-    else:
-        st.info("❗ Không tìm thấy bài giảng phù hợp.")
-    st.stop()
+        st.experimental_rerun()
 
 # ------------- INIT SESSION VARS -------------
 criteria = []
@@ -137,12 +116,35 @@ def load_criteria():
 
 criteria = load_criteria()
 
+# ------------------ VIEW HISTORY ------------------
+if st.session_state.get("view_history", False):
+    st.title("📚 Lịch sử đánh giá của bạn")
+    user_folder = f"users/{st.session_state.user}"
+    os.makedirs(user_folder, exist_ok=True)
+
+    search_term = st.text_input("🔍 Tìm kiếm tên bài giảng")
+    files = [f for f in os.listdir(user_folder) if f.endswith(".csv")]
+    filtered_files = [f for f in files if search_term.lower() in f.lower()]
+
+    if filtered_files:
+        for f in sorted(filtered_files, reverse=True):
+            with open(os.path.join(user_folder, f), "rb") as file:
+                st.download_button(
+                    label=f"📥 {f}",
+                    data=file,
+                    file_name=f,
+                    mime="text/csv"
+                )
+    else:
+        st.info("❗ Không tìm thấy bài giảng phù hợp.")
+    st.stop()
+
 # ------------------ STEP 1 ------------------
 if st.session_state.step == 1:
     st.header("Bước 1: Tải file & nhập thông tin")
-    uploaded_file = st.file_uploader("Tải lên file bài giảng", type=["pdf", "docx", "pptx"])
-    st.session_state.ten_bai_giang = st.text_input("Nhập tên bài giảng")
-    st.session_state.so_chuyen_gia = st.number_input("Số lượng chuyên gia đánh giá", min_value=1, step=1, format="%d")
+    uploaded_file = st.file_uploader("📄 Tải lên file bài giảng", type=["pdf", "docx", "pptx"])
+    st.session_state.ten_bai_giang = st.text_input("✏️ Nhập tên bài giảng")
+    st.session_state.so_chuyen_gia = st.number_input("👥 Số lượng chuyên gia đánh giá", min_value=1, step=1, format="%d")
 
     if uploaded_file:
         st.session_state.uploaded_file = uploaded_file
@@ -151,11 +153,12 @@ if st.session_state.step == 1:
         href = f'<a href="data:application/octet-stream;base64,{b64}" download="{uploaded_file.name}">📥 Tải lại file bài giảng</a>'
         st.session_state.file_url = href
 
-    if st.button("Tiếp tục"):
+    if st.button("➡️ Tiếp tục"):
         if st.session_state.uploaded_file and st.session_state.ten_bai_giang:
             st.session_state.step = 2
+            st.experimental_rerun()
         else:
-            st.warning("Vui lòng nhập đầy đủ thông tin và tải file bài giảng.")
+            st.warning("⚠️ Vui lòng nhập đầy đủ thông tin và tải file bài giảng.")
 
 # ------------------ STEP 2 ------------------
 elif st.session_state.step == 2:
@@ -166,7 +169,7 @@ elif st.session_state.step == 2:
     with col1:
         scores = []
         for i in range(st.session_state.so_chuyen_gia):
-            st.markdown(f"**Chuyên gia {i+1}:**")
+            st.markdown(f"**👨‍🏫 Chuyên gia {i+1}:**")
             expert_scores = []
             for crit in criteria:
                 score = st.slider(f"{crit}", min_value=1, max_value=10, key=f"score_{crit}_{i}")
@@ -174,7 +177,7 @@ elif st.session_state.step == 2:
             scores.append(expert_scores)
 
     with col2:
-        st.subheader("Trọng số chuyên gia (tổng = 1)")
+        st.subheader("⚖️ Trọng số chuyên gia (Tổng = 1)")
         weights_input = []
         total = 0.0
         for crit in criteria:
@@ -183,12 +186,13 @@ elif st.session_state.step == 2:
             total += w
 
         if not np.isclose(total, 1.0):
-            st.warning(f"Tổng trọng số hiện tại là {total:.2f}, cần bằng 1 để tiếp tục.")
+            st.warning(f"⚠️ Tổng trọng số hiện tại là {total:.2f}, cần bằng 1 để tiếp tục.")
         else:
-            if st.button("Đánh giá"):
+            if st.button("🎯 Đánh giá"):
                 st.session_state.expert_scores = scores
                 st.session_state.expert_weights = weights_input
                 st.session_state.step = 3
+                st.experimental_rerun()
 
 # ------------------ STEP 3 ------------------
 elif st.session_state.step == 3:
@@ -271,3 +275,4 @@ elif st.session_state.step == 3:
 
     if st.button("🔁 Đánh giá lại"):
         st.session_state.step = 1
+        st.experimental_rerun()
